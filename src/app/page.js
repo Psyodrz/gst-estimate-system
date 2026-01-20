@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Building2, User, Package, FileText, IndianRupee, ShieldCheck, Lock, CheckCircle2, RefreshCcw, FileDown, Plus, Trash2, ImageIcon } from 'lucide-react';
+import { Building2, User, Package, FileText, IndianRupee, ShieldCheck, Lock, CheckCircle2, RefreshCcw, FileDown, Plus, Trash2, ImageIcon, ArrowRight, ChevronLeft, PenTool, Upload, Printer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 // --- Cinematic Ghost Cursor ---
