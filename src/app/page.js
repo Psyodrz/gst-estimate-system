@@ -395,7 +395,7 @@ const App = () => {
        if (error) throw error;
        if (data && data[0]) {
            const created = data[0];
-           setInventory([...inventory, {
+           setInventory(prev => [...prev, {
                id: created.id,
                name: created.name,
                hsn: created.hsn,
@@ -409,7 +409,7 @@ const App = () => {
   };
 
   const updateLocalInventory = (id, field, value) => {
-    setInventory(inventory.map(item => item.id === id ? { ...item, [field]: value } : item));
+    setInventory(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
   };
 
   const saveInventoryItem = async (id, item) => {
@@ -433,7 +433,7 @@ const App = () => {
     try {
         const { error } = await supabase.from('inventory').delete().eq('id', id);
         if (error) throw error;
-        setInventory(inventory.filter(i => i.id !== id));
+        setInventory(prev => prev.filter(i => i.id !== id));
     } catch (e) {
         console.error("Error deleting item:", e);
     }
