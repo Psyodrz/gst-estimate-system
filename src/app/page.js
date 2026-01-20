@@ -385,7 +385,7 @@ const App = () => {
     }
   };
 
-  };
+
 
   const addInventoryItem = async () => {
     if (!supabase) return;
