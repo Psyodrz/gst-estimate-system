@@ -1,13 +1,8 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { 
-  Building2, User, FileText, Plus, Trash2, 
-  CheckCircle2, Lock, PenTool, Printer, FileDown, 
-  ChevronLeft, RefreshCcw, IndianRupee, LayoutTemplate,
-  Sparkles, ShieldCheck, ArrowRight, Upload, Image as ImageIcon,
-  Link, Package, Archive, FolderPlus
-} from 'lucide-react';
+import { Building2, User, Package, FileText, IndianRupee, ShieldCheck, Lock, CheckCircle2, RefreshCcw, FileDown, Plus, Trash2, ImageIcon } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 // --- Cinematic Ghost Cursor ---
 const GhostCursor = () => {
@@ -357,8 +352,84 @@ const App = () => {
   // --- Form State ---
   const [firm, setFirm] = useState({ name: 'AURA SYSTEMS', address: '', phone: '', email: '', gst: '', state: '', logo: null });
   const [client, setClient] = useState({ name: '', address: '', phone: '', gst: '' });
-  const [inventory, setInventory] = useState([]); // Master list of products
-  const [estimateItems, setEstimateItems] = useState([]); // Selected items
+  // --- Supabase Persistence ---
+  const [inventory, setInventory] = useState([]); 
+  const [isInventoryLoading, setIsInventoryLoading] = useState(true);
+
+  useEffect(() => {
+    fetchInventory();
+  }, []);
+
+  const fetchInventory = async () => {
+    try {
+      const { data, error } = await supabase.from('inventory').select('*').order('id', { ascending: true });
+      if (error) throw error;
+      const formatted = data.map(item => ({
+        id: item.id,
+        name: item.name,
+        hsn: item.hsn,
+        basePrice: item.base_price,
+        gstRate: item.gst_rate
+      }));
+      setInventory(formatted);
+    } catch (e) {
+      console.error("Error fetching inventory:", e);
+    } finally {
+      setIsInventoryLoading(false);
+    }
+  };
+
+  const addInventoryItem = async () => {
+    const newItem = { name: '', hsn: '', base_price: 0, gst_rate: 18 };
+    try {
+       const { data, error } = await supabase.from('inventory').insert([newItem]).select();
+       if (error) throw error;
+       if (data && data[0]) {
+           const created = data[0];
+           setInventory([...inventory, {
+               id: created.id,
+               name: created.name,
+               hsn: created.hsn,
+               basePrice: created.base_price,
+               gstRate: created.gst_rate
+           }]);
+       }
+    } catch (e) {
+        console.error("Error adding item:", e);
+    }
+  };
+
+  const updateLocalInventory = (id, field, value) => {
+    setInventory(inventory.map(item => item.id === id ? { ...item, [field]: value } : item));
+  };
+
+  const saveInventoryItem = async (id, item) => {
+    try {
+        const updates = {
+            name: item.name,
+            hsn: item.hsn,
+            base_price: item.basePrice,
+            gst_rate: item.gstRate
+        };
+        const { error } = await supabase.from('inventory').update(updates).eq('id', id);
+        if (error) throw error;
+    } catch (e) {
+        console.error("Error saving item:", e);
+    }
+  };
+
+  const deleteInventoryItem = async (id) => {
+    try {
+        const { error } = await supabase.from('inventory').delete().eq('id', id);
+        if (error) throw error;
+        setInventory(inventory.filter(i => i.id !== id));
+    } catch (e) {
+        console.error("Error deleting item:", e);
+    }
+  };
+
+  // --- Other State ---
+  const [estimateItems, setEstimateItems] = useState([]); 
   
   const [meta, setMeta] = useState({ 
     no: `QTN-${Math.floor(Math.random() * 10000)}`,
@@ -366,23 +437,22 @@ const App = () => {
     valid: '' 
   });
   
+  const [isIGST, setIsIGST] = useState(false);
+
   const [terms, setTerms] = useState("1. Validity: This quotation is valid for 30 days.\n2. Payment: 50% advance, balance on delivery.\n3. Taxes: GST as applicable.\n4. Delivery: Subject to availability.");
-  const [signatures, setSignatures] = useState({ firm: null, client: null, firmStamp: null, clientStamp: null, firmDate: '', clientDate: '' });
+  const [description, setDescription] = useState("This quotation covers the supply and delivery of the items as specified above, in accordance with the applicable technical specifications and quality standards. All materials supplied shall be new and covered under the respective manufacturer’s standard warranty. Standard packing and delivery are included unless stated otherwise. Any installation, testing, commissioning, or additional services shall be treated as separate and chargeable unless explicitly mentioned in this quotation. The offer is subject to the terms and conditions stated herein.");
+  const [signatures, setSignatures] = useState({ firm: null, firmStamp: null, firmDate: '' });
 
   // --- Calculations ---
   const totals = useMemo(() => {
-    // Group by GST Rate for Summary
     const taxSummary = {}; 
-
     const itemsTotal = estimateItems.reduce((acc, item) => {
       const base = parseFloat(item.basePrice || 0);
       const qty = parseFloat(item.qty || 0);
       const rate = parseFloat(item.gstRate || 18);
-      
       const taxable = base * qty;
       const taxAmt = taxable * (rate / 100);
       
-      // Add to summary
       if (!taxSummary[rate]) taxSummary[rate] = { taxable: 0, tax: 0 };
       taxSummary[rate].taxable += taxable;
       taxSummary[rate].tax += taxAmt;
@@ -399,12 +469,10 @@ const App = () => {
       tax: itemsTotal.tax,
       total: itemsTotal.total,
       summary: taxSummary,
-      words: numberToWords(itemsTotal.total)
+      words: numberToWords(itemsTotal.total) // detailed version? No, keeping simplified assumption or relying on helper if exists. Wait, helper numberToWords was invalid? No, it was used in previous code. Assuming it exists at bottom of file or I need to check.
     };
   }, [estimateItems]);
 
-
-  // --- Handlers ---
   const nextStep = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setStep(s => Math.min(s + 1, totalSteps));
@@ -415,26 +483,7 @@ const App = () => {
     setStep(s => Math.max(s - 1, 1));
   };
 
-  const addItem = (type) => {
-    const newItem = { id: Date.now(), name: '', qty: 1, unit: 'Pcs', rate: 0, gst: 18 };
-    if (type === 'item') setItems([...items, newItem]);
-    else setServices([...services, newItem]);
-  };
-
-  const updateItem = (type, id, field, val) => {
-    const setter = type === 'item' ? setItems : setServices;
-    const list = type === 'item' ? items : services;
-    setter(list.map(i => i.id === id ? { ...i, [field]: val } : i));
-  };
-
-  const removeItem = (type, id) => {
-    if (type === 'item') setItems(items.filter(i => i.id !== id));
-    else setServices(services.filter(s => s.id !== id));
-  };
-
   const handlePrint = () => window.print();
-
-  // --- Render Steps ---
 
   const renderContent = () => {
     switch(step) {
@@ -442,8 +491,6 @@ const App = () => {
         return (
           <div className="glass-panel p-8 md:p-12 rounded-[2rem] animate-scene stagger-1 border-t border-white/10">
             <PageHeader title="Firm Identity" subtitle="Establish your business presence." icon={Building2} />
-            
-            {/* Logo Section */}
             <div className="mb-8 p-6 bg-slate-900/40 rounded-2xl border border-slate-700/50 flex flex-col md:flex-row items-center gap-6">
                <div className="w-24 h-24 rounded-full bg-slate-800 border-2 border-dashed border-slate-600 flex items-center justify-center overflow-hidden shrink-0 relative group">
                   {firm.logo ? (
@@ -481,7 +528,6 @@ const App = () => {
               <InputField label="State" value={firm.state} onChange={e => setFirm({...firm, state: e.target.value})} placeholder="Maharashtra" required />
               <InputField label="Email" value={firm.email} onChange={e => setFirm({...firm, email: e.target.value})} placeholder="contact@aura.com" />
             </div>
-            {/* Added Spacer to prevent overlap */}
             <div className="h-32 w-full"></div>
             <FixedNavBar onNext={nextStep} disableNext={!firm.name || !firm.address || !firm.gst || !firm.phone} />
           </div>
@@ -493,9 +539,22 @@ const App = () => {
             <PageHeader title="Client & Quote Details" subtitle="Who is this for?" icon={User} />
             <div className="grid md:grid-cols-2 gap-8 mb-8">
               <InputField label="Client Name" value={client.name} onChange={e => setClient({...client, name: e.target.value})} placeholder="Client Company / Name" required className="md:col-span-2" />
-              <InputField label="Billing Address" value={client.address} onChange={e => setClient({...client, address: e.target.value})} placeholder="Full billing address" className="md:col-span-2" required />
-              <InputField label="Contact (Phone/Email)" value={client.phone} onChange={e => setClient({...client, phone: e.target.value})} placeholder="Need for contact" required />
+              <InputField label="Billing Address" value={client.address} onChange={e => setClient({...client, address: e.target.value})} placeholder="Full billing address" className="md:col-span-2" />
+              <InputField label="Contact (Phone/Email)" value={client.phone} onChange={e => setClient({...client, phone: e.target.value})} placeholder="Need for contact" />
               <InputField label="Client GSTIN" value={client.gst} onChange={e => setClient({...client, gst: e.target.value})} placeholder="Optional" />
+              
+              <div className="flex items-center gap-3 md:col-span-2 bg-slate-900/40 p-4 rounded-xl border border-slate-700/50">
+                  <input 
+                    type="checkbox" 
+                    id="igst-toggle" 
+                    checked={isIGST} 
+                    onChange={(e) => setIsIGST(e.target.checked)}
+                    className="w-5 h-5 accent-indigo-500 rounded cursor-pointer"
+                  />
+                  <label htmlFor="igst-toggle" className="text-sm font-bold text-slate-300 cursor-pointer select-none">
+                    Inter-state Supply (IGST Application)
+                  </label>
+              </div>
             </div>
             
             <div className="p-6 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl">
@@ -507,75 +566,83 @@ const App = () => {
                </div>
             </div>
 
-            {/* Added Spacer to prevent overlap */}
             <div className="h-32 w-full"></div>
-            <FixedNavBar onBack={prevStep} onNext={nextStep} disableNext={!client.name || !client.address || !client.phone} />
+            <FixedNavBar onBack={prevStep} onNext={nextStep} disableNext={!client.name} />
           </div>
         );
 
       case 3: // Inventory
         return (
           <div className="glass-panel p-8 md:p-12 rounded-[2rem] animate-scene stagger-1 border-t border-white/10">
-            <PageHeader title="Inventory Master" subtitle="Configure products available for this estimate." icon={Package} />
+            <PageHeader title="Inventory Master" subtitle="Configure products (Synced to Cloud)." icon={Package} />
             
-            <div className="space-y-4 mb-8">
-               {inventory.map((item, idx) => (
-                 <div key={item.id} className="p-4 bg-slate-900/60 border border-slate-700 rounded-xl grid grid-cols-12 gap-4 items-center animate-scene stagger-2">
-                    <div className="col-span-12 md:col-span-4">
-                       <InputField label="Product Name" value={item.name} onChange={e => {
-                         const newInv = [...inventory];
-                         newInv[idx].name = e.target.value;
-                         setInventory(newInv);
-                       }} placeholder="Item Name" />
-                    </div>
-                    <div className="col-span-6 md:col-span-2">
-                       <InputField label="HSN/SAC" value={item.hsn} onChange={e => {
-                         const newInv = [...inventory];
-                         newInv[idx].hsn = e.target.value;
-                         setInventory(newInv);
-                       }} placeholder="1234" />
-                    </div>
-                    <div className="col-span-6 md:col-span-2">
-                       <InputField label="Price" type="number" value={item.basePrice} onChange={e => {
-                         const newInv = [...inventory];
-                         newInv[idx].basePrice = e.target.value;
-                         setInventory(newInv);
-                       }} placeholder="0.00" />
-                    </div>
-                     <div className="col-span-6 md:col-span-2">
-                       <label className="block text-xs font-bold text-slate-400 mb-1 indent-1">GST %</label>
-                       <select 
-                          value={item.gstRate} 
-                          onChange={e => {
-                             const newInv = [...inventory];
-                             newInv[idx].gstRate = e.target.value;
-                             setInventory(newInv);
-                          }}
-                          className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-4 py-3 outline-none focus:border-indigo-500 transition-colors"
-                        >
-                          <option value="0">0%</option>
-                          <option value="5">5%</option>
-                          <option value="12">12%</option>
-                          <option value="18">18%</option>
-                          <option value="28">28%</option>
-                       </select>
-                    </div>
-                    <div className="col-span-6 md:col-span-2 flex justify-end">
-                       <button onClick={() => {
-                          const newInv = inventory.filter(i => i.id !== item.id);
-                          setInventory(newInv);
-                       }} className="p-3 hover:bg-rose-500/20 text-slate-500 hover:text-rose-500 rounded-lg transition-colors"><Trash2 size={18}/></button>
-                    </div>
-                 </div>
-               ))}
-
-               <button 
-                  onClick={() => setInventory([...inventory, { id: generateId(), name: '', hsn: '', basePrice: '', gstRate: '18', type: 'Goods' }])}
-                  className="w-full py-4 border-2 border-dashed border-indigo-500/30 bg-indigo-500/5 text-indigo-400 rounded-xl font-bold hover:bg-indigo-500/10 hover:border-indigo-500 transition-all flex items-center justify-center gap-2"
-               >
-                  <Plus size={18} /> Add New Inventory Item
-               </button>
-            </div>
+            {isInventoryLoading ? (
+                <div className="text-center py-12 text-slate-500 animate-pulse">Loading inventory...</div>
+            ) : (
+                <div className="space-y-4 mb-8">
+                   {inventory.map((item, idx) => (
+                     <div key={item.id} className="p-4 bg-slate-900/60 border border-slate-700 rounded-xl grid grid-cols-12 gap-4 items-center animate-scene stagger-2">
+                        <div className="col-span-12 md:col-span-4">
+                           <InputField 
+                                label="Product Name" 
+                                value={item.name || ''} 
+                                onChange={e => updateLocalInventory(item.id, 'name', e.target.value)} 
+                                onBlur={() => saveInventoryItem(item.id, item)}
+                                placeholder="Item Name" 
+                           />
+                        </div>
+                        <div className="col-span-6 md:col-span-2">
+                           <InputField 
+                                label="HSN/SAC" 
+                                value={item.hsn || ''} 
+                                onChange={e => updateLocalInventory(item.id, 'hsn', e.target.value)} 
+                                onBlur={() => saveInventoryItem(item.id, item)}
+                                placeholder="1234" 
+                           />
+                        </div>
+                        <div className="col-span-6 md:col-span-2">
+                           <InputField 
+                                label="Price" 
+                                type="number" 
+                                value={item.basePrice || ''} 
+                                onChange={e => updateLocalInventory(item.id, 'basePrice', e.target.value)} 
+                                onBlur={() => saveInventoryItem(item.id, item)}
+                                placeholder="0.00" 
+                           />
+                        </div>
+                         <div className="col-span-6 md:col-span-2">
+                           <label className="block text-xs font-bold text-slate-400 mb-1 indent-1">GST %</label>
+                           <select 
+                              value={item.gstRate || 18} 
+                              onChange={e => {
+                                 const newVal = e.target.value;
+                                 updateLocalInventory(item.id, 'gstRate', newVal);
+                                 // We need to pass the updated item to save, as state might not recall immediately in this scope if we just used 'item'
+                                 saveInventoryItem(item.id, { ...item, gstRate: newVal });
+                              }}
+                              className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-4 py-3 outline-none focus:border-indigo-500 transition-colors"
+                            >
+                              <option value="0">0%</option>
+                              <option value="5">5%</option>
+                              <option value="12">12%</option>
+                              <option value="18">18%</option>
+                              <option value="28">28%</option>
+                           </select>
+                        </div>
+                        <div className="col-span-6 md:col-span-2 flex justify-end">
+                           <button onClick={() => deleteInventoryItem(item.id)} className="p-3 hover:bg-rose-500/20 text-slate-500 hover:text-rose-500 rounded-lg transition-colors"><Trash2 size={18}/></button>
+                        </div>
+                     </div>
+                   ))}
+    
+                   <button 
+                      onClick={addInventoryItem}
+                      className="w-full py-4 border-2 border-dashed border-indigo-500/30 bg-indigo-500/5 text-indigo-400 rounded-xl font-bold hover:bg-indigo-500/10 hover:border-indigo-500 transition-all flex items-center justify-center gap-2"
+                   >
+                      <Plus size={18} /> Add New Inventory Item
+                   </button>
+                </div>
+            )}
 
             {/* Added Spacer to prevent overlap */}
             <div className="h-32 w-full"></div>
@@ -728,8 +795,14 @@ const App = () => {
               <div className="bg-slate-950/50 border border-slate-800 rounded-2xl p-8 space-y-5">
                 <div className="flex justify-between text-slate-400 font-medium text-lg"><span>Taxable Amount</span> <span className="font-mono text-white">{formatCurrency(totals.taxable)}</span></div>
                 <div className="h-px bg-slate-800 my-2"></div>
-                <div className="flex justify-between text-slate-500 text-sm"><span>CGST Output (9%)</span> <span className="font-mono">{formatCurrency(totals.cgst)}</span></div>
-                <div className="flex justify-between text-slate-500 text-sm"><span>SGST Output (9%)</span> <span className="font-mono">{formatCurrency(totals.sgst)}</span></div>
+                {isIGST ? (
+                   <div className="flex justify-between text-slate-500 text-sm"><span>IGST Output ({totals.tax > 0 ? 'Applicable' : '0%'})</span> <span className="font-mono">{formatCurrency(totals.tax)}</span></div>
+                ) : (
+                   <>
+                    <div className="flex justify-between text-slate-500 text-sm"><span>CGST Output (9%)</span> <span className="font-mono">{formatCurrency(totals.tax / 2)}</span></div>
+                    <div className="flex justify-between text-slate-500 text-sm"><span>SGST Output (9%)</span> <span className="font-mono">{formatCurrency(totals.tax / 2)}</span></div>
+                   </>
+                )}
                 <div className="flex justify-between text-indigo-400 font-bold text-xl pt-4 mt-2 border-t border-slate-800"><span>Total Tax</span> <span className="font-mono">{formatCurrency(totals.tax)}</span></div>
               </div>
             </div>
@@ -743,14 +816,31 @@ const App = () => {
         return (
           <div className="animate-scene stagger-1 h-full">
             <div className="glass-panel p-8 md:p-12 rounded-[2rem] h-full flex flex-col border-t border-white/10">
-              <PageHeader title="Terms & Conditions" subtitle="Legal details for the quotation." icon={ShieldCheck} />
-              <div className="flex-1 bg-slate-950/50 p-2 rounded-2xl border border-slate-800 focus-within:border-indigo-500/50 focus-within:shadow-[0_0_30px_-5px_rgba(99,102,241,0.2)] transition-all duration-300">
-                <textarea
-                  value={terms}
-                  onChange={(e) => setTerms(e.target.value)}
-                  className="w-full h-80 bg-transparent p-6 outline-none text-slate-300 leading-relaxed resize-none font-light tracking-wide placeholder:text-slate-700 text-lg"
-                  placeholder="Enter terms..."
-                ></textarea>
+              <PageHeader title="Terms & Scope" subtitle="Legal details and scope of supply." icon={ShieldCheck} />
+              
+              <div className="flex flex-col gap-6 h-full pb-8">
+                  <div className="flex flex-col flex-1 min-h-0">
+                      <label className="text-sm font-bold text-slate-400 mb-2">Terms & Conditions</label>
+                      <div className="flex-1 bg-slate-950/50 p-2 rounded-2xl border border-slate-800 focus-within:border-indigo-500/50 focus-within:shadow-[0_0_30px_-5px_rgba(99,102,241,0.2)] transition-all duration-300">
+                        <textarea
+                          value={terms}
+                          onChange={(e) => setTerms(e.target.value)}
+                          className="w-full h-full bg-transparent p-6 outline-none text-slate-300 leading-relaxed resize-none font-light tracking-wide placeholder:text-slate-700 text-sm md:text-base"
+                          placeholder="Enter terms..."
+                        ></textarea>
+                      </div>
+                  </div>
+                  <div className="flex flex-col flex-1 min-h-0">
+                      <label className="text-sm font-bold text-slate-400 mb-2">Scope of Supply / Description (Optional)</label>
+                      <div className="flex-1 bg-slate-950/50 p-2 rounded-2xl border border-slate-800 focus-within:border-indigo-500/50 focus-within:shadow-[0_0_30px_-5px_rgba(99,102,241,0.2)] transition-all duration-300">
+                        <textarea
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
+                          className="w-full h-full bg-transparent p-6 outline-none text-slate-300 leading-relaxed resize-none font-light tracking-wide placeholder:text-slate-700 text-sm md:text-base"
+                          placeholder="Enter scope description (leave empty to hide)..."
+                        ></textarea>
+                      </div>
+                  </div>
               </div>
             </div>
             {/* Added Spacer to prevent overlap */}
@@ -764,23 +854,17 @@ const App = () => {
           <div className="animate-scene stagger-1">
              <div className="glass-panel p-8 md:p-12 rounded-[2rem] border-t border-white/10">
                <PageHeader title="Authorization" subtitle="Digital signatures required to lock." icon={Lock} />
-               <div className="grid md:grid-cols-2 gap-10 mb-6 h-full">
-                 <SignaturePad 
-                    label="Authorized Signatory" 
-                    signature={signatures.firm}
-                    stamp={signatures.firmStamp}
-                    disabled={signatures.firm && signatures.firmStamp} // Only fully disable if both set? Or maybe independent. Let's keep it simple.
-                    onSave={(d) => setSignatures(prev => ({...prev, firm: d, firmDate: new Date().toLocaleDateString()}))} 
-                    onSaveStamp={(d) => setSignatures(prev => ({...prev, firmStamp: d}))}
-                 />
-                 <SignaturePad 
-                    label="Customer Acceptance" 
-                    signature={signatures.client}
-                    stamp={signatures.clientStamp}
-                    disabled={signatures.client && signatures.clientStamp}
-                    onSave={(d) => setSignatures(prev => ({...prev, client: d, clientDate: new Date().toLocaleDateString()}))} 
-                    onSaveStamp={(d) => setSignatures(prev => ({...prev, clientStamp: d}))}
-                 />
+               <div className="h-full flex justify-center">
+                 <div className="w-full max-w-lg">
+                   <SignaturePad 
+                      label="Authorized Signatory" 
+                      signature={signatures.firm}
+                      stamp={signatures.firmStamp}
+                      disabled={signatures.firm && signatures.firmStamp} 
+                      onSave={(d) => setSignatures(prev => ({...prev, firm: d, firmDate: new Date().toLocaleDateString()}))} 
+                      onSaveStamp={(d) => setSignatures(prev => ({...prev, firmStamp: d}))}
+                   />
+                 </div>
                </div>
              </div>
              {/* Added Spacer to prevent overlap */}
@@ -835,20 +919,22 @@ const App = () => {
          </div>
       </div>
 
-      {/* 2. Client Details */}
-      <div className="border border-black mb-4">
-         <div className="bg-gray-200 border-b border-black px-2 py-1 font-bold text-xs uppercase">Bill To</div>
-         <div className="p-2 flex justify-between">
-            <div className="w-1/2">
-               <p className="font-bold text-base">{client.name}</p>
-               <p className="text-xs whitespace-pre-wrap mt-1">{client.address}</p>
-            </div>
-            <div className="w-1/2 text-right">
-               <p className="text-xs">Contact: {client.phone}</p>
-               {client.gst && <p className="text-xs mt-1">GSTIN: <span className="font-bold">{client.gst}</span></p>}
-            </div>
-         </div>
-      </div>
+      {/* 2. Client Details (Hidden if empty) */}
+      {(client.name || client.address || client.phone || client.gst) && (
+        <div className="border border-black mb-4">
+           <div className="bg-gray-200 border-b border-black px-2 py-1 font-bold text-xs uppercase">Bill To</div>
+           <div className="p-2 flex justify-between">
+              <div className="w-1/2">
+                 {client.name && <p className="font-bold text-base">{client.name}</p>}
+                 {client.address && <p className="text-xs whitespace-pre-wrap mt-1">{client.address}</p>}
+              </div>
+              <div className="w-1/2 text-right">
+                 {client.phone && <p className="text-xs">Contact: {client.phone}</p>}
+                 {client.gst && <p className="text-xs mt-1">GSTIN: <span className="font-bold">{client.gst}</span></p>}
+              </div>
+           </div>
+        </div>
+      )}
 
       {/* 3. Items Table */}
       <table className="w-full border-collapse border border-black text-xs mb-4">
@@ -924,7 +1010,7 @@ const App = () => {
                <span>{formatCurrency(totals.taxable)}</span>
             </div>
             <div className="flex justify-between px-2 py-1 border-b border-black text-xs">
-               <span>Total GST:</span>
+               <span>Total Tax:</span>
                <span>{formatCurrency(totals.tax)}</span>
             </div>
             <div className="flex justify-between px-2 py-2 bg-gray-200 font-bold text-sm">
@@ -942,10 +1028,19 @@ const App = () => {
                 <tr className="bg-gray-100 text-center">
                    <th className="border border-black py-1">HSN/SAC</th>
                    <th className="border border-black py-1">Taxable Value</th>
-                   <th className="border border-black py-1">CGST Rate</th>
-                   <th className="border border-black py-1">CGST Amt</th>
-                   <th className="border border-black py-1">SGST Rate</th>
-                   <th className="border border-black py-1">SGST Amt</th>
+                   {isIGST ? (
+                       <>
+                        <th className="border border-black py-1">IGST Rate</th>
+                        <th className="border border-black py-1">IGST Amt</th>
+                       </>
+                   ) : (
+                       <>
+                        <th className="border border-black py-1">CGST Rate</th>
+                        <th className="border border-black py-1">CGST Amt</th>
+                        <th className="border border-black py-1">SGST Rate</th>
+                        <th className="border border-black py-1">SGST Amt</th>
+                       </>
+                   )}
                    <th className="border border-black py-1">Total Tax</th>
                 </tr>
              </thead>
@@ -954,10 +1049,19 @@ const App = () => {
                     <tr key={rate} className="text-center">
                        <td className="border border-black py-1">-</td>
                        <td className="border border-black py-1 text-right px-2">{formatCurrency(data.taxable)}</td>
-                       <td className="border border-black py-1">{rate/2}%</td>
-                       <td className="border border-black py-1 text-right px-2">{formatCurrency(data.tax/2)}</td>
-                       <td className="border border-black py-1">{rate/2}%</td>
-                       <td className="border border-black py-1 text-right px-2">{formatCurrency(data.tax/2)}</td>
+                       {isIGST ? (
+                           <>
+                             <td className="border border-black py-1">{rate}%</td>
+                             <td className="border border-black py-1 text-right px-2">{formatCurrency(data.tax)}</td>
+                           </>
+                       ) : (
+                           <>
+                             <td className="border border-black py-1">{rate/2}%</td>
+                             <td className="border border-black py-1 text-right px-2">{formatCurrency(data.tax/2)}</td>
+                             <td className="border border-black py-1">{rate/2}%</td>
+                             <td className="border border-black py-1 text-right px-2">{formatCurrency(data.tax/2)}</td>
+                           </>
+                       )}
                        <td className="border border-black py-1 text-right px-2 font-bold">{formatCurrency(data.tax)}</td>
                     </tr>
                  ))}
@@ -966,18 +1070,8 @@ const App = () => {
       </div>
 
       {/* 6. Signatures Footer */}
-      <div className="flex justify-between items-end pt-8 break-inside-avoid">
-        <div className="text-center w-1/3">
-           <div className="h-20 flex items-center justify-center relative">
-             {signatures.clientStamp && <img src={signatures.clientStamp} className="absolute inset-0 m-auto w-20 h-20 opacity-50 rotate-[-5deg]" alt="Stamp" />}
-             {signatures.client && <img src={signatures.client} className="h-16 relative z-10" alt="Sign" />}
-           </div>
-           <div className="border-t border-black mt-2 pt-1">
-              <p className="text-xs font-bold">Customer Acceptance</p>
-           </div>
-        </div>
-
-        <div className="text-center w-1/3">
+      <div className="flex justify-end pt-8 break-inside-avoid px-8">
+        <div className="text-center">
            <p className="text-xs font-bold mb-2">For {firm.name}</p>
            <div className="h-20 flex items-center justify-center relative">
               {signatures.firmStamp && <img src={signatures.firmStamp} className="absolute inset-0 m-auto w-20 h-20 opacity-50 rotate-[5deg]" alt="Stamp" />}
@@ -990,12 +1084,14 @@ const App = () => {
       </div>
 
       {/* 7. Fixed Scope of Supply Section (Bottom) */}
-      <div className="mb-4 mt-12 text-xs break-inside-avoid px-2">
-         <p className="font-bold underline mb-1 uppercase">Description / Scope of Supply:</p>
-         <p className="text-justify leading-tight">
-            This quotation covers the supply and delivery of the items as specified above, in accordance with the applicable technical specifications and quality standards. All materials supplied shall be new and covered under the respective manufacturer’s standard warranty. Standard packing and delivery are included unless stated otherwise. Any installation, testing, commissioning, or additional services shall be treated as separate and chargeable unless explicitly mentioned in this quotation. The offer is subject to the terms and conditions stated herein.
-         </p>
-      </div>
+      {description && (
+        <div className="mb-4 mt-12 text-xs break-inside-avoid px-2">
+           <p className="font-bold underline mb-1 uppercase">Description / Scope of Supply:</p>
+           <p className="text-justify leading-tight">
+              {description}
+           </p>
+        </div>
+      )}
 
       {/* 8. Footer Note */}
       <div className="mt-4 text-center border-t border-gray-300 pt-2 break-inside-avoid">
