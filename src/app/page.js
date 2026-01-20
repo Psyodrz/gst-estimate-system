@@ -1329,7 +1329,7 @@ const App = () => {
 
         {/* Preview Overlay */}
         {isPreview && (
-          <div className="fixed inset-0 z-[60] bg-black/95 backdrop-blur-xl overflow-y-auto print:overflow-visible print:bg-white animate-scene">
+          <div className="fixed inset-0 z-[60] bg-black/95 backdrop-blur-xl overflow-y-auto print:hidden animate-scene">
             <div className="min-h-screen py-10 print:py-0">
                <div className="max-w-[210mm] mx-auto flex justify-between items-center mb-8 px-6 no-print text-white">
                   <div>
