@@ -361,6 +361,12 @@ const App = () => {
   }, []);
 
   const fetchInventory = async () => {
+    if (!supabase) {
+      console.warn("Supabase client not initialized. Inventory features disabled.");
+      setIsInventoryLoading(false);
+      return;
+    }
+
     try {
       const { data, error } = await supabase.from('inventory').select('*').order('id', { ascending: true });
       if (error) throw error;
@@ -379,7 +385,10 @@ const App = () => {
     }
   };
 
+  };
+
   const addInventoryItem = async () => {
+    if (!supabase) return;
     const newItem = { name: '', hsn: '', base_price: 0, gst_rate: 18 };
     try {
        const { data, error } = await supabase.from('inventory').insert([newItem]).select();
@@ -404,6 +413,7 @@ const App = () => {
   };
 
   const saveInventoryItem = async (id, item) => {
+    if (!supabase) return;
     try {
         const updates = {
             name: item.name,
@@ -419,6 +429,7 @@ const App = () => {
   };
 
   const deleteInventoryItem = async (id) => {
+    if (!supabase) return;
     try {
         const { error } = await supabase.from('inventory').delete().eq('id', id);
         if (error) throw error;
