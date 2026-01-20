@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+@theme {
+  --font-heading: var(--font-outfit), sans-serif;
+  --font-sans: var(--font-inter), sans-serif;
+}
+
+:root {
+  --cursor-size: 40px;
+}
+
+html, body {
+  background-color: #020617; /* Slate-950 */
+  color: #e2e8f0; /* Slate-200 */
+  overflow-x: hidden;
+  cursor: none !important; /* Force hide default cursor globally */
+  font-family: var(--font-sans);
+}
+
+/* Aggressively hide cursor on all interactables including text inputs */
+*, *::before, *::after, input, textarea, button, select, a, label {
+  cursor: none !important;
+}
+
+/* Fallback/Explicit mapping if theme doesn't catch all */
+h1, h2, h3, h4, .font-heading {
+  font-family: var(--font-heading);
+}
+
+/* Cinematic Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a; 
+}
+::-webkit-scrollbar-thumb {
+  background: #334155; 
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569; 
+}
+
+/* Staggered Animations */
+@keyframes cinematicSlide {
+  0% { opacity: 0; transform: translateY(30px) scale(0.98); filter: blur(4px); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+.animate-scene {
+  animation: cinematicSlide 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.stagger-1 { animation-delay: 0.1s; opacity: 0; }
+.stagger-2 { animation-delay: 0.2s; opacity: 0; }
+.stagger-3 { animation-delay: 0.3s; opacity: 0; }
+
+/* Glass Panels */
+.glass-panel {
+  background: rgba(30, 41, 59, 0.4);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.2), 0 20px 40px -20px rgba(0,0,0,0.5);
+}
+
+/* Input Glows */
+.input-field:focus-within {
+  border-color: rgba(129, 140, 248, 0.5);
+  box-shadow: 0 0 20px -5px rgba(99, 102, 241, 0.3);
+  background: rgba(30, 41, 59, 0.8);
+}
+
+/* Print Overrides */
+@media print {
+  body { background: white; color: black; cursor: default !important; }
+  *, input, textarea { cursor: default !important; }
+  .no-print { display: none !important; }
+  .glass-panel { background: white; border: none; box-shadow: none; backdrop-filter: none; color: black; }
+  * { animation: none !important; transition: none !important; }
+  .cursor-trail { display: none; }
+}
