@@ -683,7 +683,7 @@ const App = () => {
                         <select 
                            className="flex-1 bg-slate-950 border border-slate-700 text-white rounded-xl px-4 py-3 outline-none focus:border-indigo-500"
                            onChange={(e) => {
-                              const item = inventory.find(i => i.id === e.target.value);
+                              const item = inventory.find(i => i.id.toString() === e.target.value);
                               if (item) {
                                  setEstimateItems([...estimateItems, { ...item, qty: 1, uid: generateId() }]); // Copy item + UID
                               }
