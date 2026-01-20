@@ -60,3 +60,26 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+/* Print Overrides */
+@media print {
+  body {
+    background: white;
+    color: black;
+    overflow: visible !important;
+    height: auto !important;
+  }
+  
+  /* Hide all generic interactive elements that might leak through */
+  button, input, textarea, select {
+    display: none !important;
+  }
+
+  /* But show buttons/inputs inside .no-print-hide if we wanted, but generally we want specific control */
+  
+  /* Ensure the dedicated print container is visible and others are hidden */
+  /* This is handled by tailwind classes print:block/print:hidden but redundant safety here */
+  .glass-panel, header, .fixed.inset-0.bg-black {
+    display: none !important;
+  }
+}

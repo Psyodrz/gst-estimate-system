@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Building2, User, Package, FileText, IndianRupee, ShieldCheck, Lock, CheckCircle2, RefreshCcw, FileDown, Plus, Trash2, ImageIcon, ArrowRight, ChevronLeft, PenTool, Upload, Printer } from 'lucide-react';
+import { Building2, User, Package, FileText, IndianRupee, ShieldCheck, Lock, CheckCircle2, RefreshCcw, FileDown, Plus, Trash2, ImageIcon, ArrowRight, ChevronLeft, PenTool, Upload, Printer, Save, FolderOpen, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 // --- Cinematic Ghost Cursor ---
@@ -151,7 +151,7 @@ const FixedNavBar = ({ onBack, onNext, disableNext, nextLabel = "Next" }) => (
   </div>
 );
 
-const InputField = ({ label, value, onChange, placeholder, type = "text", required = false, disabled = false, className = "" }) => (
+const InputField = ({ label, value, onChange, placeholder, type = "text", required = false, disabled = false, className = "", ...props }) => (
   <div className={`flex flex-col gap-2 ${className} group input-field rounded-2xl transition-all duration-300 p-1`}>
     <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1 group-focus-within:text-indigo-400 transition-colors">
       {label} {required && <span className="text-indigo-500">*</span>}
@@ -169,6 +169,7 @@ const InputField = ({ label, value, onChange, placeholder, type = "text", requir
             ? 'border-slate-800 text-slate-600 cursor-not-allowed' 
             : 'border-slate-700/80 hover:border-slate-600'}
         `}
+        {...props}
       />
     </div>
   </div>
@@ -341,6 +342,50 @@ const SignaturePad = ({ onSave, onSaveStamp, signature, stamp, label, disabled }
   );
 };
 
+// --- Drafts Modal ---
+const DraftsModal = ({ isOpen, onClose, drafts, onLoad, onDelete, isLoading }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl relative">
+         <button onClick={onClose} className="absolute right-4 top-4 p-2 text-slate-500 hover:text-white hover:bg-white/10 rounded-full transition-colors"><Trash2 className="rotate-45" size={20} /></button> 
+         {/* Using Trash2 rotated as Close icon or just X if I had X. Using Trash2 rotated is weird. Let's use Just a simulated X with text or existing icon if possible, but I don't have X imported. I'll import X or just use text. Wait, I can use Trash2 but that's confusing. I'll add 'X' to imports or just use a div. Let's use text 'Close'. */}
+         
+         <div className="p-8 border-b border-white/10">
+            <h2 className="text-2xl font-bold text-white flex items-center gap-3"><FolderOpen className="text-indigo-400"/> Saved Drafts</h2>
+            <p className="text-slate-400">Manage your saved estimates.</p>
+         </div>
+         
+         <div className="flex-1 overflow-y-auto p-8 space-y-4">
+            {isLoading ? (
+               <div className="flex justify-center p-12"><Loader2 className="animate-spin text-indigo-500" size={32}/></div>
+            ) : drafts.length === 0 ? (
+               <div className="text-center py-12 text-slate-500">No saved drafts found.</div>
+            ) : (
+               drafts.map(draft => (
+                 <div key={draft.id} className="bg-slate-950/50 border border-slate-800 rounded-xl p-6 flex items-center justify-between group hover:border-indigo-500/50 transition-all">
+                    <div>
+                       <h4 className="text-white font-bold text-lg mb-1">{draft.name || 'Untitled Draft'}</h4>
+                       <p className="text-xs text-slate-500">{new Date(draft.created_at).toLocaleDateString()} • {new Date(draft.created_at).toLocaleTimeString()}</p>
+                    </div>
+                    <div className="flex gap-3">
+                       <button onClick={() => onLoad(draft)} className="px-4 py-2 bg-indigo-500/10 text-indigo-400 rounded-lg text-sm font-bold hover:bg-indigo-500 hover:text-white transition-all border border-indigo-500/20">Load</button>
+                       <button onClick={() => onDelete(draft.id)} className="p-2 text-slate-600 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors"><Trash2 size={18}/></button>
+                    </div>
+                 </div>
+               ))
+            )}
+         </div>
+         
+         <div className="p-6 border-t border-white/10 flex justify-end">
+            <button onClick={onClose} className="px-6 py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-colors">Close</button>
+         </div>
+      </div>
+    </div>
+  );
+};
+
 // --- Main Application ---
 
 const App = () => {
@@ -355,6 +400,10 @@ const App = () => {
   // --- Supabase Persistence ---
   const [inventory, setInventory] = useState([]); 
   const [isInventoryLoading, setIsInventoryLoading] = useState(true);
+  const [saveStatus, setSaveStatus] = useState('idle'); // idle, saving, saved, error
+  const [drafts, setDrafts] = useState([]);
+  const [showDrafts, setShowDrafts] = useState(false);
+  const [isDraftsLoading, setIsDraftsLoading] = useState(false);
 
   useEffect(() => {
     fetchInventory();
@@ -414,6 +463,7 @@ const App = () => {
 
   const saveInventoryItem = async (id, item) => {
     if (!supabase) return;
+    setSaveStatus('saving');
     try {
         const updates = {
             name: item.name,
@@ -423,8 +473,11 @@ const App = () => {
         };
         const { error } = await supabase.from('inventory').update(updates).eq('id', id);
         if (error) throw error;
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (e) {
         console.error("Error saving item:", e);
+        setSaveStatus('error');
     }
   };
 
@@ -443,16 +496,101 @@ const App = () => {
   const [estimateItems, setEstimateItems] = useState([]); 
   
   const [meta, setMeta] = useState({ 
-    no: `QTN-${Math.floor(Math.random() * 10000)}`,
-    date: new Date().toISOString().split('T')[0], 
+    no: '',
+    date: '', 
     valid: '' 
   });
+
+  useEffect(() => {
+     setMeta({
+        no: `QTN-${Math.floor(Math.random() * 10000)}`,
+        date: new Date().toISOString().split('T')[0],
+        valid: ''
+     });
+  }, []);
   
   const [isIGST, setIsIGST] = useState(false);
 
   const [terms, setTerms] = useState("1. Validity: This quotation is valid for 30 days.\n2. Payment: 50% advance, balance on delivery.\n3. Taxes: GST as applicable.\n4. Delivery: Subject to availability.");
   const [description, setDescription] = useState("This quotation covers the supply and delivery of the items as specified above, in accordance with the applicable technical specifications and quality standards. All materials supplied shall be new and covered under the respective manufacturer’s standard warranty. Standard packing and delivery are included unless stated otherwise. Any installation, testing, commissioning, or additional services shall be treated as separate and chargeable unless explicitly mentioned in this quotation. The offer is subject to the terms and conditions stated herein.");
   const [signatures, setSignatures] = useState({ firm: null, firmStamp: null, firmDate: '' });
+
+  // --- Draft Logic ---
+  const fetchDrafts = async () => {
+    if (!supabase) return;
+    setIsDraftsLoading(true);
+    try {
+      const { data, error } = await supabase.from('drafts').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      setDrafts(data || []);
+    } catch (e) {
+      console.error("Error fetching drafts:", e);
+    } finally {
+      setIsDraftsLoading(false);
+    }
+  };
+
+  const saveDraft = async () => {
+    if (!supabase) return;
+    const draftName = prompt("Enter a name for this draft:", client.name || "New Estimate");
+    if (!draftName) return;
+
+    const draftData = {
+      step,
+      firm,
+      client,
+      estimateItems,
+      meta,
+      isIGST,
+      terms,
+      description,
+      signatures
+    };
+
+    try {
+      const { error } = await supabase.from('drafts').insert([{ name: draftName, data: draftData }]);
+      if (error) throw error;
+      alert("Draft saved successfully!");
+      fetchDrafts(); // Refresh list
+    } catch (e) {
+      console.error("Error saving draft:", e);
+      alert("Failed to save draft.");
+    }
+  };
+
+  const loadDraft = (draft) => {
+    try {
+      const data = draft.data;
+      if (data.firm) setFirm(data.firm);
+      if (data.client) setClient(data.client);
+      if (data.estimateItems) setEstimateItems(data.estimateItems);
+      if (data.meta) setMeta(data.meta);
+      if (data.isIGST) setIsIGST(data.isIGST);
+      if (data.terms) setTerms(data.terms);
+      if (data.description) setDescription(data.description);
+      if (data.signatures) setSignatures(data.signatures);
+      if (data.step) setStep(data.step);
+      setShowDrafts(false);
+    } catch (e) {
+      console.error("Error loading draft:", e);
+      alert("Failed to load draft data.");
+    }
+  };
+
+  const deleteDraft = async (id) => {
+    if (!confirm("Are you sure you want to delete this draft?")) return;
+    try {
+      const { error } = await supabase.from('drafts').delete().eq('id', id);
+      if (error) throw error;
+      setDrafts(prev => prev.filter(d => d.id !== id));
+    } catch (e) {
+      console.error("Error deleting draft:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (showDrafts) fetchDrafts();
+  }, [showDrafts]);
 
   // --- Calculations ---
   const totals = useMemo(() => {
@@ -659,6 +797,12 @@ const App = () => {
 
             {/* Added Spacer to prevent overlap */}
             <div className="h-32 w-full"></div>
+            <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-slate-900/80 backdrop-blur-md p-2 rounded-full border border-slate-700/50 shadow-xl">
+                 <span className={`text-xs font-bold px-3 ${saveStatus === 'saved' ? 'text-emerald-400' : saveStatus === 'saving' ? 'text-indigo-400' : saveStatus === 'error' ? 'text-rose-400' : 'text-slate-500'}`}>
+                    {saveStatus === 'saving' && <Loader2 className="inline animate-spin mr-1" size={12}/>}
+                    {saveStatus === 'idle' ? 'Cloud Sync Ready' : saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Changes Saved' : 'Sync Error'}
+                 </span>
+            </div>
             <FixedNavBar onBack={prevStep} onNext={nextStep} />
           </div>
         );
@@ -751,6 +895,16 @@ const App = () => {
             {/* Added Spacer to prevent overlap */}
             <div className="h-24 w-full"></div>
             <FixedNavBar onBack={prevStep} onNext={nextStep} disableNext={estimateItems.length === 0} />
+
+             {/* Drafts Fab */}
+             <div className="fixed bottom-32 right-6 z-30 flex flex-col gap-3">
+                 <button onClick={saveDraft} className="p-4 bg-indigo-600 text-white rounded-full shadow-lg hover:bg-indigo-500 transition-all hover:scale-105 tooltip" title="Save Draft">
+                    <Save size={24} />
+                 </button>
+                 <button onClick={() => setShowDrafts(true)} className="p-4 bg-slate-800 text-white rounded-full shadow-lg hover:bg-slate-700 transition-all hover:scale-105 border border-slate-600" title="My Drafts">
+                    <FolderOpen size={24} />
+                 </button>
+            </div>
           </div>
         );
 
@@ -1135,7 +1289,17 @@ const App = () => {
               <img src="/logo.png" alt="InventStory" className="h-12 md:h-16 w-auto object-contain flex-shrink-0" />
               <h1 className="font-heading font-bold text-lg md:text-2xl tracking-tight text-white drop-shadow-md whitespace-nowrap">AURA <span className="text-slate-500 font-light">SYSTEMS</span></h1>
             </div>
-            {!isLocked && <StepIndicator currentStep={step} totalSteps={totalSteps} />}
+            <div className="flex items-center gap-4 md:gap-6">
+                 {!isLocked && <StepIndicator currentStep={step} totalSteps={totalSteps} />}
+                 <button 
+                    onClick={() => setShowDrafts(true)}
+                    className="p-3 bg-slate-800/50 hover:bg-indigo-600/20 text-slate-400 hover:text-indigo-400 rounded-xl border border-white/5 hover:border-indigo-500/30 transition-all flex items-center gap-2"
+                    title="My Drafts"
+                >
+                    <FolderOpen size={20} />
+                    <span className="hidden md:inline text-sm font-bold">Drafts</span>
+                </button>
+            </div>
           </div>
         </header>
 
@@ -1184,8 +1348,23 @@ const App = () => {
                </div>
             </div>
           </div>
+
         )}
+
+        {/* Dedicated Print Container for Flawless Mobile Printing */}
+        <div className="hidden print:block print:absolute print:inset-0 print:bg-white print:z-[9999] print:h-auto print:w-full print:overflow-visible">
+            <PrintableDocument />
+        </div>
+
       </div>
+      <DraftsModal 
+         isOpen={showDrafts} 
+         onClose={() => setShowDrafts(false)} 
+         drafts={drafts} 
+         isLoading={isDraftsLoading}
+         onLoad={loadDraft}
+         onDelete={deleteDraft}
+      />
     </>
   );
 };
