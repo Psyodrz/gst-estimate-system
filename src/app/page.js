@@ -539,6 +539,8 @@ const App = () => {
             <PageHeader title="Client & Quote Details" subtitle="Who is this for?" icon={User} />
             <div className="grid md:grid-cols-2 gap-8 mb-8">
               <InputField label="Client Name" value={client.name} onChange={e => setClient({...client, name: e.target.value})} placeholder="Client Company / Name" required className="md:col-span-2" />
+              {/* Only Client Name is mandatory as per user request */}
+
               <InputField label="Billing Address" value={client.address} onChange={e => setClient({...client, address: e.target.value})} placeholder="Full billing address" className="md:col-span-2" />
               <InputField label="Contact (Phone/Email)" value={client.phone} onChange={e => setClient({...client, phone: e.target.value})} placeholder="Need for contact" />
               <InputField label="Client GSTIN" value={client.gst} onChange={e => setClient({...client, gst: e.target.value})} placeholder="Optional" />
