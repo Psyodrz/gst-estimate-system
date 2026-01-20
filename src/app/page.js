@@ -1022,11 +1022,9 @@ const App = () => {
         <header className="fixed top-0 inset-x-0 z-50 no-print transition-all duration-300">
           <div className="absolute inset-0 bg-[#020617]/80 backdrop-blur-xl border-b border-white/5"></div>
           <div className="relative max-w-7xl mx-auto px-6 h-24 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="bg-gradient-to-tr from-indigo-500 to-purple-600 p-2.5 rounded-xl shadow-[0_0_25px_rgba(99,102,241,0.4)]">
-                <LayoutTemplate className="w-6 h-6 text-white" />
-              </div>
-              <h1 className="font-heading font-bold text-2xl tracking-tight text-white drop-shadow-md">AURA <span className="text-slate-500 font-light">SYSTEMS</span></h1>
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-0 md:gap-4 min-w-0">
+              <img src="/logo.png" alt="InventStory" className="h-12 md:h-16 w-auto object-contain flex-shrink-0" />
+              <h1 className="font-heading font-bold text-lg md:text-2xl tracking-tight text-white drop-shadow-md whitespace-nowrap">AURA <span className="text-slate-500 font-light">SYSTEMS</span></h1>
             </div>
             {!isLocked && <StepIndicator currentStep={step} totalSteps={totalSteps} />}
           </div>
